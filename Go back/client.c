@@ -1,67 +1,80 @@
-#include<stdio.h>
-#include<stdlib.h>
-#include<string.h>
-#include<unistd.h>
-#include<arpa/inet.h>
-#include<sys/socket.h>
-#include<netinet/in.h>
-#include<sys/time.h>
+#include <stdio.h>
+#include <stdlib.h>
+#include <string.h>
+#include <unistd.h>
+#include <arpa/inet.h>
+#include <sys/time.h>
 
-int main(){
-    int cli_sock,i,j,flag=1,note=1;
-    char msg1[50] = "ACK",write_buff[50],read_buff[100];
-    struct sockaddr_in client;
-    cli_sock = socket(AF_INET,SOCK_STREAM,0);
-    memset(&client,0,sizeof(client));
-    client.sin_family = AF_INET;
-    client.sin_port = htons(7891);
-    client.sin_addr.s_addr = inet_addr("127.0.0.1");
-    if(connect(cli_sock,(struct sockaddr*)&client,sizeof(client))==-1){
-        printf("Error in connecting to server\n");
-        exit(0);
+#define PORT 8080
+#define BUFFER_SIZE 1024
+#define TIMEOUT 3  // Timeout in seconds
+#define WINDOW_SIZE 4  // Sliding window size
+#define TOTAL_PACKETS 10  // Number of packets to send
+
+int main() {
+    int sock = 0;
+    struct sockaddr_in serv_addr;
+    char buffer[BUFFER_SIZE] = {0};
+    struct timeval tv;
+
+    if ((sock = socket(AF_INET, SOCK_STREAM, 0)) < 0) {
+        perror("Socket creation failed");
+        exit(EXIT_FAILURE);
     }
-    printf("-------Receiver of Go back N where N=8-------\n");
-    for(i=0;i<10;i++){
-        memset(&read_buff,0,sizeof(read_buff));
-        memset(&write_buff,0,sizeof(write_buff));
-        if(i==5 && flag==1){
-            flag =0;
-            read(cli_sock,read_buff,sizeof(read_buff));
-            if(read_buff[strlen(read_buff)-1] != i+'0'){
-                printf("----Packets from sender %d lost----%d Received out of order - Discarding---",i,i-1);
-                i--;
-            }
-            else{
-                if(i==0){
-                    printf("-> %s",read_buff);
-                    read(cli_sock,read_buff,sizeof(read_buff));
-                    i++;
-                }
-                printf("-> %s",read_buff);
-                if((i==5)||(i==3)){
-                    read(cli_sock,read_buff,sizeof(read_buff));
-                    printf("-> %s",read_buff);
-                    i++;
-                    if(i==7){
-                        j=0;
-                    }
-                    else{
-                        j=i+1;
-                    }
-                    if((i==6)||(i==4)||(i==1)){
-                        printf(",- ACK %d ---CUMULATIVE ACK ----",j);
-                    }
-                    else{
-                        printf(",- ACK %d ---  INDIVIDUAL ACK ----",j);
-                    }
-                    printf("------------");
-                    strcpy(write_buff,msg1);
-                    write_buff[strlen(msg1)] = j + '0';
-                    write(cli_sock,write_buff,strlen(write_buff));
-                }
-            }
-        }        
+
+    serv_addr.sin_family = AF_INET;
+    serv_addr.sin_port = htons(PORT);
+
+    if (inet_pton(AF_INET, "127.0.0.1", &serv_addr.sin_addr) <= 0) {
+        perror("Invalid address/ Address not supported");
+        exit(EXIT_FAILURE);
     }
-    close(cli_sock);
+
+    if (connect(sock, (struct sockaddr *)&serv_addr, sizeof(serv_addr)) < 0) {
+        perror("Connection failed");
+        exit(EXIT_FAILURE);
+    }
+
+    printf("Client: Connected to server.\n");
+
+    tv.tv_sec = TIMEOUT;
+    tv.tv_usec = 0;
+    setsockopt(sock, SOL_SOCKET, SO_RCVTIMEO, (const char*)&tv, sizeof(tv));
+
+    int base = 1;
+    int next_to_send = 1;
+    int ack, packets_acked = 0;
+
+    while (packets_acked < TOTAL_PACKETS) {
+        // Send all packets in the window
+        while (next_to_send < base + WINDOW_SIZE && next_to_send <= TOTAL_PACKETS) {
+            memset(buffer,0,BUFFER_SIZE);
+            printf("Client: Sending packet %d\n", next_to_send);
+            sprintf(buffer, "%d", next_to_send);
+            send(sock, buffer, strlen(buffer)+1, 0);
+            next_to_send++;
+      }
+
+        // Wait for ACK
+        memset(buffer, 0, BUFFER_SIZE);
+        int valread = read(sock, buffer, BUFFER_SIZE);
+
+        if (valread > 0) {
+            ack = atoi(buffer);
+            printf("Client: ACK received for packet %d\n", ack);
+            
+            // Slide the window if ACK corresponds to the base
+            if (ack == base) {
+                base = ack + 1;
+                packets_acked = ack;
+            }
+        } else {
+            printf("Client: Timeout! Retransmitting from packet %d...\n", base);
+            next_to_send = base;  // Reset next_to_send to base for retransmission
+        }
+    }
+
+    printf("Client: All packets sent successfully.\n");
+    close(sock);
     return 0;
 }
