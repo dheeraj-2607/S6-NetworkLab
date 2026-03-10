@@ -1,85 +1,69 @@
-#include<stdio.h>
-#include<stdlib.h>
-#include<string.h>
-#include<unistd.h>
-#include<arpa/inet.h>
-#include<sys/socket.h>
-#include<netinet/in.h>
+#include <stdio.h>
+#include <stdlib.h>
+#include <string.h>
+#include <unistd.h>
+#include <arpa/inet.h>
+#include <sys/time.h>
 
-int main(void){
-    int client,y,x,k=5,m=1,p;
-    char buffer[1024];
+#define PORT 8088
+#define BUFFER_SIZE 1024
+#define TIMEOUT 3  // Timeout in seconds
 
-    struct sockaddr_in servAddr;
-    socklen_t addr_size;
+int main() {
+    int sock = 0;
+    struct sockaddr_in serv_addr;
+    char buffer[BUFFER_SIZE] = {0};
+    char packet[50];
+    struct timeval tv;
 
-    client=socket(AF_INET,SOCK_STREAM,0);
-
-    servAddr.sin_family=AF_INET;
-    servAddr.sin_port=htons(7891);
-    servAddr.sin_addr.s_addr=inet_addr("127.0.0.1");
-    memset(servAddr.sin_zero,'\0',sizeof(servAddr.sin_zero));
-
-    y = connect(client,(struct sockaddr*)&servAddr,sizeof(servAddr));
-
-    if(y==-1){
-        printf("Connection error\n");
-        exit(1);
+    // Create socket
+    if ((sock = socket(AF_INET, SOCK_STREAM, 0)) < 0) {
+        perror("Socket creation failed");
+        exit(EXIT_FAILURE);
     }
 
-    while(k!=0){
-        if(m<=5){
-            printf("sending %d\n",m);
-            if(m%2==0){
-                strcpy(buffer,"frame");
-            }
+    serv_addr.sin_family = AF_INET;
+    serv_addr.sin_port = htons(PORT);
 
-            else{
-                strcpy(buffer,"error");
-                printf("Packet loss\n");
+    // Convert IP address
+    if (inet_pton(AF_INET, "127.0.0.1", &serv_addr.sin_addr) <= 0) {
+        perror("Invalid address or Address not supported");
+        exit(EXIT_FAILURE);
+    }
 
-                for(p=1;p<=3;p++){
-                    printf("Waiting for %d seconds\n",p);
+    // Connect to server
+    if (connect(sock, (struct sockaddr *)&serv_addr, sizeof(serv_addr)) < 0) {
+        perror("Connection failed");
+        exit(EXIT_FAILURE);
+    }
 
-                }
+    printf("Client: Connected to server.\n");
 
-                printf("Retransmitting...\n");
-                strcpy(buffer,"frame");
-                sleep(3);
-            }
+    // Set socket timeout
+    tv.tv_sec = TIMEOUT;
+    tv.tv_usec = 0;
+    setsockopt(sock, SOL_SOCKET, SO_RCVTIMEO, (const char*)&tv, sizeof(tv));
 
-            int x = send(client,buffer,strlen(buffer),0);
+    int packet_number = 1;
+    while (packet_number <= 5) {
+        sprintf(packet, "%d", packet_number);
+        printf("Client: Sending packet %d...\n", packet_number);
+        send(sock, packet, strlen(packet), 0);
 
-            if(x==-1){
-                printf("Error in sending data\n");
-                exit(1);
-            }
+        // Wait for ACK
+        int valread = read(sock, buffer, BUFFER_SIZE);
 
-            else{
-                printf("send%d\n",m);
-            }
-
-            int z = recv(client,buffer,1024,0);
-
-            if(z==-1){
-                printf("Error in receiving data\n");
-                exit(1);
-            }
-
-            buffer[z] = '\0';
-            k--;
-            m++;
-
-            if((strncmp(buffer,"ack",3)==0)){
-                printf("Acknowledgement received\n");
-            }
-            else{
-                printf("Acknowledgement not received\n");
-            }
-            
+        if (valread > 0 && strcmp(buffer, "ACK") == 0) {
+            printf("Client: ACK received for packet %d\n\n", packet_number);
+            packet_number++;
+        } else {
+            printf("Client: Timeout! Retransmitting packet %d...\n\n", packet_number);
         }
+
+        memset(buffer, 0, BUFFER_SIZE);  // Clear buffer
     }
 
-    close(client);
+    printf("Client: All packets sent successfully.\n");
+    close(sock);
     return 0;
 }

@@ -1,89 +1,74 @@
-#include<stdio.h>
-#include<stdlib.h>
-#include<string.h>
-#include<unistd.h>
-#include<arpa/inet.h>
-#include<sys/socket.h>
-#include<netinet/in.h>
+#include <stdio.h>
+#include <stdlib.h>
+#include <string.h>
+#include <unistd.h>
+#include <arpa/inet.h>
+#include <time.h>
 
-int main(void){
-    int server,x,newSock,k=5,m=1,p;
-    char buffer[1024];
+#define PORT 8088
+#define BUFFER_SIZE 1024
 
-    struct sockaddr_in servAddr;
-    struct sockaddr_storage store;
-    socklen_t addrSize;
+int main() {
+    int server_fd, new_socket;
+    struct sockaddr_in address;
+    int addrlen = sizeof(address);
+    char buffer[BUFFER_SIZE] = {0};
+    int ack_prob = 70;  // 70% chance of sending ACK
 
-    server=socket(AF_INET,SOCK_STREAM,0);
-    servAddr.sin_family=AF_INET;
-    servAddr.sin_port=htons(7891);
-    servAddr.sin_addr.s_addr=inet_addr("127.0.0.1");
+    srand(time(0));  // Random seed for ACK simulation
 
-    memset(servAddr.sin_zero,'\0',sizeof(servAddr.sin_zero));
-    bind(server,(struct sockaddr*)&servAddr,sizeof(servAddr));
-
-    if(listen(server,5)==0){
-        printf("Listening...\n");
-    }
-    else{
-        printf("Error in listening\n");
+    // Create socket
+    if ((server_fd = socket(AF_INET, SOCK_STREAM, 0)) == 0) {
+        perror("Socket creation failed");
+        exit(EXIT_FAILURE);
     }
 
-    addrSize = sizeof(store);
-    newSock=accept(server,(struct sockaddr*)&store,&addrSize);
+    // Define server address
+    address.sin_family = AF_INET;
+    address.sin_addr.s_addr = INADDR_ANY;
+    address.sin_port = htons(PORT);
 
-    if(newSock == -1){
-        printf("Error in accepting connection\n");
-        exit(1);
+    // Bind socket to port
+    if (bind(server_fd, (struct sockaddr *)&address, sizeof(address)) < 0) {
+        perror("Bind failed");
+        exit(EXIT_FAILURE);
     }
 
-    while(k!=0){
-        int  y= recv(newSock,buffer,1024,0);
-        if(y==-1){
-            printf("Error in receiving data\n");
-            exit(1);
-        }
-        else{
-            buffer[y] = '\0';
-            printf("Received: %s\n",buffer);
-        }
-
-        if(strncmp(buffer,"frame",5)==0){
-            printf("Received %d successfully\n",m);
-        }
-        else{
-            printf("Frame %d not received\n",m);
-
-        }
-
-        if(m%2==0){
-            strcpy(buffer,"ack");
-        }
-        else{
-            strcpy(buffer,"kca");
-            printf("Ack lost\n");
-
-            for(p=1;p<=3;p++){
-                printf("Waiting for %d seconds\n",p);
-                sleep(1);
-            }
-
-             printf("Acknowledgement retransmitted\n");
-             strcpy(buffer,"ack");
-            sleep(3);
-        }
-
-        printf("Sending ack %d\n",m);
-        int z = send(newSock,buffer,strlen(buffer),0);
-
-        if(z==-1){
-            printf("Error in sending\n");
-            exit(1);
-        }
-        k--;
-        m++;
+    // Listen for incoming connections
+    if (listen(server_fd, 3) < 0) {
+        perror("Listen failed");
+        exit(EXIT_FAILURE);
     }
-    
-    close(newSock);
+
+    printf("Server: Waiting for connection...\n");
+
+    // Accept connection from client
+    if ((new_socket = accept(server_fd, (struct sockaddr *)&address, (socklen_t*)&addrlen)) < 0) {
+        perror("Accept failed");
+        exit(EXIT_FAILURE);
+    }
+
+    printf("Server: Connection established.\n");
+
+    while (1) {
+        // Receive packet from client
+        int valread = read(new_socket, buffer, BUFFER_SIZE);
+        if (valread == 0) break;
+
+        printf("Server: Received packet - %s\n", buffer);
+
+        // Simulate ACK or loss
+        if (rand() % 100 < ack_prob) {
+            printf("Server: ACK sent for packet %s\n\n", buffer);
+            send(new_socket, "ACK", strlen("ACK"), 0);
+        } else {
+            printf("Server: ACK lost for packet %s\n\n", buffer);
+        }
+
+        memset(buffer, 0, BUFFER_SIZE);  // Clear buffer
+    }
+
+    close(new_socket);
+    close(server_fd);
     return 0;
 }
