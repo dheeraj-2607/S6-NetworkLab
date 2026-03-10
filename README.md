@@ -4,19 +4,16 @@ This repository contains the programs and experiments done as part of the **CSL3
 
 ## Experiments
 
-1. Network simulation using Cisco Packet Tracer
-2. Linux networking commands
 3. TCP echo server and UDP echo server
 4. TCP client-server program (string reverse)
 5. UDP client-server program (addition of two numbers)
 6. Implementation of FTP `get` and `put` commands
 7. Link State Routing algorithm
-8. Distance Vector Routing algorithm
 9. Stop and Wait flow control
 10. Go-Back-N ARQ protocol
-11. TCP 3-way handshake using Wireshark
-12. Multi-client UDP server using epoll
-13. Study of NS-2 network simulator
+11. TCP 3-way handshake using Wireshark😥
+12. Multi-client UDP server using epoll😥
+13. Study of NS-2 network simulator😥
 
 ## Language Used
 
