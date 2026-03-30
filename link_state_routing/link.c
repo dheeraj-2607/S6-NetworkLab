@@ -8,7 +8,7 @@ int main() {
   // Read the number of routers which are available 
   int n ; 
   printf("Enter the number of routers: "); 
-  scanf("%d", &n );
+  scanf("%d", &n);
   
   // Read the cost matrix  
   int cost[n][n]; 
@@ -53,7 +53,9 @@ int main() {
     // update the adjacent nodes dist with least cost 
     
     for(int j = 0; j < n; j++ ){
-      if(!s[j] && dist[j] > dist[node] + cost[node][j]) dist[j] = dist[node] + cost[node][j]; 
+      if(!s[j] && dist[j] > dist[node] + cost[node][j]) {
+        dist[j] = dist[node] + cost[node][j]; 
+      }
     }
   }
   
